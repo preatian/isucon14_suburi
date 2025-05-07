@@ -1,0 +1,1 @@
+kw ansible_host=192.168.237.128 ansible_user=isucon ansible_sudo_pass=isucon
