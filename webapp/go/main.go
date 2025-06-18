@@ -178,7 +178,7 @@ func writeError(w http.ResponseWriter, statusCode int, err error) {
 	}
 	w.Write(buf)
 
-	slog.Error("error response wrote", err)
+	slog.Error("error response wrote", slog.Any("err", err))
 }
 
 func secureRandomStr(b int) string {

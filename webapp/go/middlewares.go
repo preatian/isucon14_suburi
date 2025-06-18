@@ -7,6 +7,14 @@ import (
 	"net/http"
 )
 
+type ContextKey string
+
+const (
+	UserContextKey  ContextKey = "user"
+	OwnerContextKey ContextKey = "owner"
+	ChairContextKey ContextKey = "chair"
+)
+
 func appAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -27,7 +35,7 @@ func appAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx = context.WithValue(ctx, "user", user)
+		ctx = context.WithValue(ctx, UserContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -51,7 +59,7 @@ func ownerAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx = context.WithValue(ctx, "owner", owner)
+		ctx = context.WithValue(ctx, OwnerContextKey, owner)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -76,7 +84,7 @@ func chairAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx = context.WithValue(ctx, "chair", chair)
+		ctx = context.WithValue(ctx, ChairContextKey, chair)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
