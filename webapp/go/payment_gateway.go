@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -44,6 +45,7 @@ func requestPaymentGatewayPostPayment(ctx context.Context, paymentGatewayURL str
 				return err
 			}
 			defer res.Body.Close()
+			log.Printf("aaaaaaaaa POST %s/payments: %s", paymentGatewayURL, res.Status)
 
 			if res.StatusCode != http.StatusNoContent {
 				// エラーが返ってきても成功している場合があるので、社内決済マイクロサービスに問い合わせ

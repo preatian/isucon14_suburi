@@ -144,7 +144,6 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 			log.Printf("failed to communicate with pprotein: %v", err)
 		}
 	}()
-
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 }
 
