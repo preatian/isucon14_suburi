@@ -151,7 +151,7 @@ func appPostPaymentMethods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := ctx.Value("user").(*User)
+	user := ctx.Value(UserContextKey).(*User)
 
 	_, err := db.ExecContext(
 		ctx,
@@ -191,7 +191,7 @@ type getAppRidesResponseItemChair struct {
 
 func appGetRides(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user := ctx.Value("user").(*User)
+	user := ctx.Value(UserContextKey).(*User)
 
 	tx, err := db.Beginx()
 	if err != nil {
@@ -304,7 +304,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := ctx.Value("user").(*User)
+	user := ctx.Value(UserContextKey).(*User)
 	rideID := ulid.Make().String()
 
 	tx, err := db.Beginx()
@@ -461,7 +461,7 @@ func appPostRidesEstimatedFare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := ctx.Value("user").(*User)
+	user := ctx.Value(UserContextKey).(*User)
 
 	tx, err := db.Beginx()
 	if err != nil {
@@ -662,7 +662,7 @@ type appGetNotificationResponseChairStats struct {
 
 func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user := ctx.Value("user").(*User)
+	user := ctx.Value(UserContextKey).(*User)
 
 	tx, err := db.Beginx()
 	if err != nil {

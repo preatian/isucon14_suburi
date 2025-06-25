@@ -100,7 +100,7 @@ func ownerGetSales(w http.ResponseWriter, r *http.Request) {
 		until = time.UnixMilli(parsed)
 	}
 
-	owner := r.Context().Value("owner").(*Owner)
+	owner := r.Context().Value(OwnerContextKey).(*Owner)
 
 	tx, err := db.Beginx()
 	if err != nil {
@@ -192,7 +192,7 @@ type ownerGetChairResponseChair struct {
 
 func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	owner := ctx.Value("owner").(*Owner)
+	owner := ctx.Value(OwnerContextKey).(*Owner)
 
 	chairs := []chairWithDetail{}
 	if err := db.SelectContext(ctx, &chairs, `SELECT id,
