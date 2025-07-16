@@ -111,6 +111,32 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	/* 	latest_location := &ChairLocation{}
+	   	if err := tx.GetContext(ctx, latest_location, `SELECT * FROM chair_locations WHERE chair_id = ? ORDER BY created_at DESC LIMIT 1`, chair.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	   		writeError(w, http.StatusInternalServerError, err)
+	   		return
+	   	}
+	   	distance := abs(latest_location.Latitude-req.Latitude) + abs(latest_location.Longitude-req.Longitude)
+
+	   	td := &TotalDistance{}
+	   	if err := tx.GetContext(ctx, td, `SELECT * FROM totaldistance WHERE chair_id = ? LIMIT 1`, chair.ID); err != nil {
+	   		if errors.Is(err, sql.ErrNoRows) {
+	   			if _, err := tx.ExecContext(ctx, `INSERT INTO totaldistance (chair_id, distance, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP(6))`, chair.ID, distance); err != nil {
+	   				writeError(w, http.StatusInternalServerError, err)
+	   				return
+	   			}
+	   		} else {
+	   			writeError(w, http.StatusInternalServerError, err)
+	   			return
+	   		}
+	   	} else {
+	   		newDistance := td.Distance + distance
+	   		if _, err := tx.ExecContext(ctx, `UPDATE totaldistance SET distance = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE chair_id = ?`, newDistance, chair.ID); err != nil {
+	   			writeError(w, http.StatusInternalServerError, err)
+	   			return
+	   		}
+	   	} */
+
 	chairLocationID := ulid.Make().String()
 	if _, err := tx.ExecContext(
 		ctx,

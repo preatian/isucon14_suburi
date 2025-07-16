@@ -195,27 +195,19 @@ func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
 	owner := ctx.Value(OwnerContextKey).(*Owner)
 
 	chairs := []chairWithDetail{}
-	if err := db.SelectContext(ctx, &chairs, `SELECT id,
-       owner_id,
-       name,
-       access_token,
-       model,
-       is_active,
-       created_at,
-       updated_at,
-       IFNULL(total_distance, 0) AS total_distance,
-       total_distance_updated_at
-FROM chairs
-       LEFT JOIN (SELECT chair_id,
-                          SUM(IFNULL(distance, 0)) AS total_distance,
-                          MAX(created_at)          AS total_distance_updated_at
-                   FROM (SELECT chair_id,
-                                created_at,
-                                ABS(latitude - LAG(latitude) OVER (PARTITION BY chair_id ORDER BY created_at)) +
-                                ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance
-                         FROM chair_locations) tmp
-                   GROUP BY chair_id) distance_table ON distance_table.chair_id = chairs.id
-WHERE owner_id = ?
+	if err := db.SelectContext(ctx, &chairs, `SELECT 
+	     chairs.id as id,
+         chairs.owner_id as owner_id,
+         chairs.name as name,
+         chairs.access_token as access_token,
+         chairs.model as model,
+         chairs.is_active as is_active,
+         chairs.created_at as created_at,
+         chairs.updated_at as updated_at,
+         IFNULL(td.distance, 0) AS total_distance,
+         td.updated_at AS total_distance_updated_at
+       FROM chairs LEFT JOIN totaldistance td ON td.chair_id = chairs.id
+       WHERE chairs.owner_id = ?
 `, owner.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

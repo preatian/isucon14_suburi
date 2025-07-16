@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+type TotalDistance struct {
+	ChairID   string    `db:"chair_id"`
+	Distance  int       `db:"distance"`
+	UpdatedAt time.Time `db:"updated_at"`
+}
+
 type Chair struct {
 	ID          string    `db:"id"`
 	OwnerID     string    `db:"owner_id"`

@@ -36,6 +36,9 @@ CREATE TABLE chairs
 )
   COMMENT = '椅子情報テーブル';
 
+
+
+
 DROP TABLE IF EXISTS chair_locations;
 CREATE TABLE chair_locations
 (
@@ -134,3 +137,14 @@ CREATE TABLE coupons
   PRIMARY KEY (user_id, code)
 )
   COMMENT 'クーポンテーブル';
+
+
+DROP TABLE IF EXISTS totaldistance;
+CREATE TABLE totaldistance
+(
+  chair_id              VARCHAR(26)  NOT NULL COMMENT '椅子ID',
+  distance             INTEGER      NOT NULL DEFAULT 0 COMMENT 'distance',
+  updated_at           DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '更新日時',
+  PRIMARY KEY (chair_id)
+)
+  COMMENT 'destancetable';

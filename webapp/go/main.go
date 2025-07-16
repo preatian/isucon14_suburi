@@ -144,6 +144,33 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 			log.Printf("failed to communicate with pprotein: %v", err)
 		}
 	}()
+
+	distances := []TotalDistance{}
+
+	if err := db.SelectContext(ctx, &distances, `
+		SELECT
+			tmp.chair_id as chair_id,
+			SUM(IFNULL(tmp.distance, 0)) as distance,
+			MAX(tmp.created_at) as updated_at
+		FROM (
+			SELECT
+				cl.id,
+				cl.chair_id,
+				cl.created_at,
+				ABS(cl.latitude - LAG(cl.latitude) OVER (PARTITION BY cl.chair_id ORDER BY cl.created_at)) +
+				ABS(cl.longitude - LAG(cl.longitude) OVER (PARTITION BY cl.chair_id ORDER BY cl.created_at)) AS distance
+			FROM chair_locations cl
+		) tmp
+		JOIN chairs c ON tmp.chair_id = c.id
+		GROUP BY tmp.chair_id, c.owner_id
+		`); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	db.NamedExecContext(ctx, `INSERT INTO totaldistance (chair_id, distance, updated_at)
+		VALUES (:chair_id, :distance, :updated_at)
+	`, distances)
+
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 }
 
