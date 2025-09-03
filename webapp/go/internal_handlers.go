@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 )
 
@@ -22,8 +23,16 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 
 	matched := &Chair{}
 	if err := db.GetContext(ctx, matched, `
-    SELECT * FROM chairs
-    WHERE is_active = TRUE
+    SELECT chairs.*
+    FROM chairs
+    JOIN (
+      SELECT cl1.chair_id, cl1.latitude, cl1.longitude
+      FROM chair_locations cl1
+      WHERE cl1.created_at = (
+        SELECT MAX(cl2.created_at) FROM chair_locations cl2 WHERE cl2.chair_id = cl1.chair_id
+      )
+    ) cl ON cl.chair_id = chairs.id
+    WHERE chairs.is_active = TRUE
       AND NOT EXISTS (
         SELECT 1 FROM rides
         WHERE chair_id = chairs.id
@@ -37,8 +46,9 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
             WHERE t.ride_id = rides.id AND t.cnt < 6
           )
       )
+    ORDER BY (ABS(cl.latitude - ?) + ABS(cl.longitude - ?)) ASC
     LIMIT 1
-    `); err != nil {
+    `, ride.PickupLatitude, ride.PickupLongitude); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -50,6 +60,13 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", matched.ID, ride.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+	channel, ok := chairChannels.getChannel(matched.ID)
+	if ok {
+		fmt.Printf("notify send chair channel found: %s\n", matched.ID)
+		channel <- struct{}{}
+	} else {
+		fmt.Printf("notify send chair channel not found: %s\n", matched.ID)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

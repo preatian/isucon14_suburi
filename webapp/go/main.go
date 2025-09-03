@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -20,6 +21,49 @@ import (
 
 var db *sqlx.DB
 
+type MutexChannel struct {
+	channels map[string]chan struct{}
+	sync.RWMutex
+}
+
+func NewMutexChannel() *MutexChannel {
+	return &MutexChannel{
+		channels: make(map[string]chan struct{}),
+	}
+}
+
+var (
+	chairChannels = NewMutexChannel()
+	userChannels  = NewMutexChannel()
+)
+
+// グローバルチャンネルに新しいチャネルを追加
+func (mc *MutexChannel) registerChannel(key string) chan struct{} {
+	mc.Lock()
+	defer mc.Unlock()
+	ch := make(chan struct{})
+	mc.channels[key] = ch
+	return ch
+}
+
+// グローバルチャンネルからチャネルを取得
+func (mc *MutexChannel) getChannel(key string) (chan struct{}, bool) {
+	mc.RLock()
+	defer mc.RUnlock()
+	ch, ok := mc.channels[key]
+	return ch, ok
+}
+
+// グローバルチャンネルからチャネルを削除
+func (mc *MutexChannel) unregisterChannel(key string) {
+	mc.Lock()
+	defer mc.Unlock()
+
+	if ch, ok := mc.channels[key]; ok {
+		close(ch)
+		delete(mc.channels, key)
+	}
+}
 func main() {
 	mux := setup()
 	slog.Info("Listening on :8080")

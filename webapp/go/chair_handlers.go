@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -19,6 +21,16 @@ type chairPostChairsRequest struct {
 type chairPostChairsResponse struct {
 	ID      string `json:"id"`
 	OwnerID string `json:"owner_id"`
+}
+
+func sendChairChannel(chairID string) {
+	channel, ok := chairChannels.getChannel(chairID)
+	if ok {
+		fmt.Printf("notify send chair channel found: %s\n", chairID)
+		channel <- struct{}{}
+	} else {
+		fmt.Printf("notify send chair channel not found: %s\n", chairID)
+	}
 }
 
 func chairPostChairs(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +115,8 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var chair_status_change = false
+
 	chair := ctx.Value(ChairContextKey).(*Chair)
 
 	tx, err := db.Beginx()
@@ -181,12 +195,16 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
+			chair_status_change = true
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+	if chair_status_change {
+		sendChairChannel(chair.ID)
 	}
 	log.Printf("chairLocationID: %s, chairID: %s, latitude: %d, longitude: %d", chairLocationID, chair.ID, req.Latitude, req.Longitude)
 
@@ -213,41 +231,32 @@ type chairGetNotificationResponseData struct {
 	Status                string     `json:"status"`
 }
 
-func chairGetNotification(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	chair := ctx.Value(ChairContextKey).(*Chair)
+func chairGetNotificationData(ctx context.Context, chair_id string) ([]byte, error) {
 
 	tx, err := db.Beginx()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
+		return nil, fmt.Errorf("db Begin failed: %w", err)
 	}
 	defer tx.Rollback()
 	ride := &Ride{}
 	yetSentRideStatus := RideStatus{}
 	status := ""
 
-	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
+	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair_id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-				RetryAfterMs: 30,
-			})
-			return
+			return []byte("{}"), nil
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
+		return nil, fmt.Errorf("failed to get ride for chair %s: %w", chair_id, err)
 	}
 
 	if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			status, err = getLatestRideStatus(ctx, tx, ride.ID)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, err)
-				return
+				return nil, fmt.Errorf("failed to get latest ride status for ride %s: %w", ride.ID, err)
 			}
 		} else {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			return nil, fmt.Errorf("failed to get yet sent ride status for ride %s: %w", ride.ID, err)
 		}
 	} else {
 		status = yetSentRideStatus.Status
@@ -256,42 +265,85 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	user := &User{}
 	err = tx.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
+		return nil, fmt.Errorf("failed to get user for ride %s: %w", ride.ID, err)
 	}
 
 	if yetSentRideStatus.ID != "" {
 		_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			return nil, fmt.Errorf("failed to update ride status for ride %s: %w", ride.ID, err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		return nil, fmt.Errorf("db Commit failed: %w", err)
+	}
+	data := &chairGetNotificationResponseData{
+		RideID: ride.ID,
+		User: simpleUser{
+			ID:   user.ID,
+			Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
+		},
+		PickupCoordinate: Coordinate{
+			Latitude:  ride.PickupLatitude,
+			Longitude: ride.PickupLongitude,
+		},
+		DestinationCoordinate: Coordinate{
+			Latitude:  ride.DestinationLatitude,
+			Longitude: ride.DestinationLongitude,
+		},
+		Status: status,
+	}
+	json_data, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal chair notification data: %w", err)
+	}
+	return json_data, nil
+
+}
+
+func chairGetNotification(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	chair := ctx.Value(ChairContextKey).(*Chair)
+
+	chirData, err := chairGetNotificationData(ctx, chair.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to get chair notification data: %w", err))
 		return
 	}
+	fmt.Printf("notify write chair %s, %v: \n", chair.ID, string(chirData))
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Write([]byte("data: "))
+	w.Write(chirData)
+	w.Write([]byte("\n\n"))
+	w.(http.Flusher).Flush()
 
-	writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
-		Data: &chairGetNotificationResponseData{
-			RideID: ride.ID,
-			User: simpleUser{
-				ID:   user.ID,
-				Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
-			},
-			PickupCoordinate: Coordinate{
-				Latitude:  ride.PickupLatitude,
-				Longitude: ride.PickupLongitude,
-			},
-			DestinationCoordinate: Coordinate{
-				Latitude:  ride.DestinationLatitude,
-				Longitude: ride.DestinationLongitude,
-			},
-			Status: status,
-		},
-		RetryAfterMs: 30,
-	})
+	var ch chan struct{}
+	ch, ok := chairChannels.getChannel(chair.ID)
+	if !ok {
+		ch = chairChannels.registerChannel(chair.ID)
+	}
+	defer chairChannels.unregisterChannel(chair.ID)
+	for {
+		select {
+		case <-ch:
+			chirData, err := chairGetNotificationData(ctx, chair.ID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to get chair notification data: %w", err))
+				return
+			}
+			fmt.Printf("notify write chair %s: %s\n", chair.ID, string(chirData))
+			w.Write([]byte("data: "))
+			w.Write(chirData)
+			w.Write([]byte("\n"))
+			w.(http.Flusher).Flush()
+		case <-ctx.Done():
+			writeError(w, http.StatusAccepted, errors.New("context done"))
+			return
+		}
+	}
 }
 
 type postChairRidesRideIDStatusRequest struct {
@@ -299,10 +351,13 @@ type postChairRidesRideIDStatusRequest struct {
 }
 
 func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
+
 	ctx := r.Context()
 	rideID := r.PathValue("ride_id")
 
 	chair := ctx.Value(ChairContextKey).(*Chair)
+
+	fmt.Printf("chairPostRideStatus called: %s\n", chair.ID)
 
 	req := &postChairRidesRideIDStatusRequest{}
 	if err := bindJSON(r, req); err != nil {
@@ -362,6 +417,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	sendChairChannel(chair.ID)
 
 	w.WriteHeader(http.StatusNoContent)
 }
