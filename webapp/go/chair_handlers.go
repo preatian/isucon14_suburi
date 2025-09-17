@@ -34,6 +34,16 @@ func sendChairChannel(chairID string) {
 	}
 }
 
+func sendUserChannel(userID string) {
+	channel, ok := userChannels.getChannel(userID)
+	if ok {
+		fmt.Printf("notify send chair channel found: %s\n", userID)
+		channel <- struct{}{}
+	} else {
+		fmt.Printf("notify send chair channel not found: %s\n", userID)
+	}
+}
+
 func chairPostChairs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req := &chairPostChairsRequest{}
@@ -430,6 +440,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	sendUserChannel(ride.UserID)
 	sendChairChannel(chair.ID)
 
 	w.WriteHeader(http.StatusNoContent)

@@ -134,5 +134,6 @@ func matching() {
 		} else {
 			fmt.Printf("notify send chair channel not found: %s\n", matched.ID)
 		}
+		sendUserChannel(ride.UserID)
 	}
 }
