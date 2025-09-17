@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/oklog/ulid/v2"
 )
@@ -328,6 +329,17 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	defer chairChannels.unregisterChannel(chair.ID)
 	for {
 		select {
+		case <-time.After(3 * time.Second):
+			chirData, err := chairGetNotificationData(ctx, chair.ID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to get chair notification data: %w", err))
+				return
+			}
+			fmt.Printf("notify write chair %s: %s\n", chair.ID, string(chirData))
+			w.Write([]byte("data: "))
+			w.Write(chirData)
+			w.Write([]byte("\n"))
+			w.(http.Flusher).Flush()
 		case <-ch:
 			chirData, err := chairGetNotificationData(ctx, chair.ID)
 			if err != nil {
@@ -342,6 +354,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			writeError(w, http.StatusAccepted, errors.New("context done"))
 			return
+
 		}
 	}
 }

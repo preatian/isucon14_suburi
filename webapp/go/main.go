@@ -28,20 +28,21 @@ type MutexChannel struct {
 
 func NewMutexChannel() *MutexChannel {
 	return &MutexChannel{
-		channels: make(map[string]chan struct{}),
+		channels: make(map[string]chan struct{}, 100),
 	}
 }
 
 var (
 	chairChannels = NewMutexChannel()
 	userChannels  = NewMutexChannel()
+	rideChannels  = make(chan *Ride, 1000)
 )
 
 // グローバルチャンネルに新しいチャネルを追加
 func (mc *MutexChannel) registerChannel(key string) chan struct{} {
 	mc.Lock()
 	defer mc.Unlock()
-	ch := make(chan struct{})
+	ch := make(chan struct{}, 100)
 	mc.channels[key] = ch
 	return ch
 }
@@ -65,6 +66,7 @@ func (mc *MutexChannel) unregisterChannel(key string) {
 	}
 }
 func main() {
+	go matching()
 	mux := setup()
 	slog.Info("Listening on :8080")
 	http.ListenAndServe(":8080", mux)
