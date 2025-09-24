@@ -87,28 +87,31 @@ func matching() {
 		matched := &Chair{}
 		if err := db.GetContext(ctx, matched, `
     SELECT chairs.*
-    FROM chairs
+    FROM  chairs
     JOIN (
-      SELECT cl1.chair_id, cl1.latitude, cl1.longitude
-      FROM chair_locations cl1
-      WHERE cl1.created_at = (
-        SELECT MAX(cl2.created_at) FROM chair_locations cl2 WHERE cl2.chair_id = cl1.chair_id
-      )
-    ) cl ON cl.chair_id = chairs.id
-    WHERE chairs.is_active = TRUE
-      AND NOT EXISTS (
-        SELECT 1 FROM rides
-        WHERE chair_id = chairs.id
-          AND EXISTS (
-            SELECT 1 FROM (
-              SELECT ride_id, COUNT(chair_sent_at) AS cnt
-              FROM ride_statuses
-              WHERE ride_id = rides.id
-              GROUP BY ride_id
-            ) AS t
-            WHERE t.ride_id = rides.id AND t.cnt < 6
-          )
-      )
+    	SELECT chair_id,latitude,longitude
+		FROM (
+			SELECT chair_id,latitude,longitude,ROW_NUMBER()
+			OVER(PARTITION BY chair_id ORDER BY created_at DESC) AS rn
+			FROM chair_locations
+		) cl2
+		WHERE rn = 1
+    ) cl
+	ON cl.chair_id = chairs.id
+    WHERE
+		chairs.is_active = TRUE
+		AND NOT EXISTS (
+			SELECT 1
+  			FROM rides
+  		 	JOIN (
+    	 		SELECT ride_id
+		 	    FROM ride_statuses
+    	 		GROUP BY ride_id
+    	 		HAVING COUNT(chair_sent_at) < 6
+  		 	) AS incomplete_rides
+		 	ON incomplete_rides.ride_id = rides.id
+  		 	WHERE rides.chair_id = chairs.id
+		)
     ORDER BY (ABS(cl.latitude - ?) + ABS(cl.longitude - ?)) ASC
     LIMIT 1
     `, ride.PickupLatitude, ride.PickupLongitude); err != nil {
@@ -120,6 +123,7 @@ func matching() {
 				}()
 				continue
 			}
+			log.Printf("failed to find match for ride %s: %v\n", ride.ID, err)
 			continue
 		}
 
