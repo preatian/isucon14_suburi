@@ -66,8 +66,8 @@ func (mc *MutexChannel) unregisterChannel(key string) {
 	}
 }
 func main() {
-	go matching()
 	mux := setup()
+	go matching()
 	slog.Info("Listening on :8080")
 	http.ListenAndServe(":8080", mux)
 }

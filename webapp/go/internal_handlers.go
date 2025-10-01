@@ -12,13 +12,7 @@ import (
 
 func matching() {
 
-	for {
-		ride := <-rideChannels
-		log.Printf("matching start for ride %s\n", ride.ID)
-
-		ctx := context.Background()
-		matched := &Chair{}
-		if err := db.GetContext(ctx, matched, `
+	query := `
     SELECT chairs.*
     FROM  chairs
     JOIN (
@@ -31,6 +25,7 @@ func matching() {
 		WHERE rn = 1
     ) cl
 	ON cl.chair_id = chairs.id
+	JOIN chair_models cm ON chairs.model = cm.name
     WHERE
 		chairs.is_active = TRUE
 		AND NOT EXISTS (
@@ -45,9 +40,22 @@ func matching() {
 		 	ON incomplete_rides.ride_id = rides.id
   		 	WHERE rides.chair_id = chairs.id
 		)
-    ORDER BY (ABS(cl.latitude - ?) + ABS(cl.longitude - ?)) ASC
+    ORDER BY (ABS(cl.latitude - :pickup_latitude) + ABS(cl.longitude - :pickup_longitude)) ASC
     LIMIT 1
-    `, ride.PickupLatitude, ride.PickupLongitude); err != nil {
+    `
+	nstmt, err := db.PrepareNamed(query)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer nstmt.Close()
+
+	for {
+		ride := <-rideChannels
+		log.Printf("matching start for ride %s\n", ride.ID)
+
+		ctx := context.Background()
+		matched := &Chair{}
+		if err = nstmt.Get(matched, ride); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				log.Printf("no match found for ride %s\n", ride.ID)
 				go func() {
