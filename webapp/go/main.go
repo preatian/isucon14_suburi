@@ -153,7 +153,7 @@ func setup() http.Handler {
 
 	// internal handlers
 	{
-		mux.HandleFunc("GET /api/internal/matching", internalGetMatching)
+		//mux.HandleFunc("GET /api/internal/matching", internalGetMatching)
 	}
 
 	return mux
