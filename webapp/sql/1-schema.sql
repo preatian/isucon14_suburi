@@ -148,3 +148,22 @@ CREATE TABLE totaldistance
   PRIMARY KEY (chair_id)
 )
   COMMENT 'destancetable';
+
+DROP TABLE IF EXISTS chair_status;
+CREATE TABLE chair_status
+(
+  chair_id           VARCHAR(26)  NOT NULL COMMENT '椅子ID',
+  owner_id     VARCHAR(26)  NOT NULL COMMENT 'オーナーID',
+  name         VARCHAR(30)  NOT NULL COMMENT '椅子の名前',
+  model        TEXT         NOT NULL COMMENT '椅子のモデル',
+  is_active    TINYINT(1)   NOT NULL COMMENT '配椅子受付中かどうか',
+  access_token VARCHAR(255) NOT NULL COMMENT 'アクセストークン',
+  created_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '登録日時',
+  updated_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '更新日時',
+  last_latitude   INTEGER     NOT NULL COMMENT '経度',
+  last_longitude  INTEGER     NOT NULL COMMENT '緯度',
+  total_distance             INTEGER      NOT NULL DEFAULT 0 COMMENT 'total_distance',
+  coordinate_updated_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '更新日時',
+  PRIMARY KEY (chair_id)
+)
+  COMMENT 'chairstatus';
